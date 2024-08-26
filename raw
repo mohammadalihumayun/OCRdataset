@@ -1,0 +1,568 @@
+### web text scraping
+"""text scraping"""
+
+! pip install selenium
+
+import sys
+sys.path.insert(0,'/usr/lib/chromium-browser/chromedriver')
+
+import csv
+import time
+import pandas as pd
+from bs4 import BeautifulSoup
+from selenium import webdriver
+#import chromedriver_autoinstaller
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+
+
+# setup chrome options
+chrome_options = webdriver.ChromeOptions()
+chrome_options.add_argument('--headless') # ensure GUI is off
+chrome_options.add_argument('--no-sandbox')
+chrome_options.add_argument('--disable-dev-shm-usage')
+
+driver = webdriver.Chrome(options=chrome_options)
+
+# Step 2: Open the page
+url = "https://www.rekhta.org/poets/allama-iqbal/ghazals?lang=ur"
+driver.get(url)
+
+# Step 3: Scroll down to load all content
+SCROLL_PAUSE_TIME = 2
+
+# Get scroll height
+last_height = driver.execute_script("return document.body.scrollHeight")
+
+while True:
+    # Scroll down to bottom
+    driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+
+    # Wait to load page
+    time.sleep(SCROLL_PAUSE_TIME)
+
+    # Calculate new scroll height and compare with last scroll height
+    new_height = driver.execute_script("return document.body.scrollHeight")
+    if new_height == last_height:
+        break
+    last_height = new_height
+
+# Step 4: Get page source and parse with BeautifulSoup
+html_content = driver.page_source
+soup = BeautifulSoup(html_content, 'html.parser')
+
+# Step 5: Find all <div> elements with class 'contentListItems nwPoetListBody'
+divs = soup.find_all('div', class_='contentListItems nwPoetListBody')
+
+# Step 6: Extract the URLs from the <a> elements within each <div>
+urls = []
+for div in divs:
+    a_tag = div.find('a', href=True)
+    if a_tag:
+        urls.append(a_tag['href'])
+
+# Step 7: Print the extracted URLs
+for url in urls:
+    print(url)
+
+# Close the browser
+driver.quit()
+
+import requests
+from bs4 import BeautifulSoup
+import html
+
+# Step 1: Fetch the HTML content of the page
+#url = "https://www.rekhta.org/poets/allama-iqbal/ghazals?lang=ur"
+url='https://www.rekhta.org/poets/allama-iqbal/nazms?lang=ur'
+Genre='Nazms'#Ghazals'
+
+
+response = requests.get(url)
+html_content = response.content
+
+# Step 2: Parse the HTML content using BeautifulSoup
+soup = BeautifulSoup(html_content, 'html.parser')
+
+# Step 3: Find all <div> elements with class 'contentListItems nwPoetListBody'
+divs = soup.find_all('div', class_='contentListItems nwPoetListBody')
+
+# Step 4: Extract the URLs from the <a> elements within each <div>
+urls = []
+for div in divs:
+    a_tag = div.find('a', href=True)
+    if a_tag:
+        urls.append(a_tag['href'])
+
+# Step 5: Print the extracted URLs
+#for url in urls:
+#    print(url)
+print('urls fetched: ',len(urls))
+
+
+# URL of the page containing the HTML text
+for iter, url in enumerate(urls):
+  # Fetch the HTML content
+  response = requests.get(url)
+  response.raise_for_status()  # Ensure the request was successful
+  # Parse the HTML content
+  soup = BeautifulSoup(response.text, 'html.parser')
+  # Find the input element containing the HTML text
+  input_element = soup.find('input', {'id': 'HtmlRawText'})
+  # Get the HTML content from the 'data-html' attribute
+  html_content = input_element['data-html']
+  # Decode the HTML entities
+  decoded_html = html.unescape(html_content)
+  # Parse the decoded HTML content
+  parsed_html = BeautifulSoup(decoded_html, 'html.parser')
+  # Extract text content, maintaining the line structure
+  lines = []
+  for p_tag in parsed_html.find_all('p'):
+    line_text = ''.join(span.get_text() for span in p_tag.find_all('span'))
+    lines.append(line_text)
+  # Join lines with newline characters
+  concatenated_text = '\n'.join(lines)
+  f=open('/content/drive/MyDrive/Iqbal_ocr/transcripts/'+Genre+'_'+str(iter)+'.txt','a')
+  f.write(concatenated_text)
+  f.close()
+print('writing complete')
+
+####### pdf to images and their segmentation
+
+"""Latest code for dataset segmentation starts"""
+
+! pip install PyPDF2
+! pip install pdf2image
+! apt-get install poppler-utils
+
+import cv2
+import numpy as np
+import matplotlib.pyplot as plt
+
+import PyPDF2
+from PIL import Image
+from pdf2image import convert_from_path
+
+def save_lines(img,page_num,out_path,name):
+ ret, thresh2 = cv2.threshold(img, 150, 255, cv2.THRESH_BINARY_INV)
+ kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (150,1))#150,2
+ mask = cv2.morphologyEx(thresh2, cv2.MORPH_DILATE, kernel)
+ #plt.imshow(mask)
+ # boxes
+ bboxes = []
+ bboxes_img = img.copy()
+ contours = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+ contours = contours[0] if len(contours) == 2 else contours[1]
+ for cntr in contours:
+    x,y,w,h = cv2.boundingRect(cntr)
+    cv2.rectangle(bboxes_img, (x, y), (x+w, y+h), (0,0,255), 1)
+    bboxes.append((x,y,w,h))
+    #plt.imshow(bboxes_img)
+ #
+ bboxes = sorted(bboxes, key=lambda box: box[1])
+ for i, (x, y, w, h) in enumerate(bboxes):
+    # Extract ROI from original image
+    roi = img[y:y+h, x:x+w]
+    #plt.imshow(roi)
+    # Save ROI as a separate image
+    #print('line',i)
+    cv2.imwrite(f'/{out_path}/{name}_page_{page_num}_line_{i}.png', roi)
+    # Optionally, draw the bounding box on the original image
+    #cv2.rectangle(img, (x, y), (x+w, y+h), (0, 0, 255), 1)
+ return
+
+pdf_path = '/content/drive/MyDrive/Iqbal_ocr/kuliyat iqbal.pdf'
+output_path='content/drive/MyDrive/Iqbal_ocr/' # 187
+name='ghazals_11'
+#pdf_path = '/content/Malfoozat-e-Hakeem-ul-Ummatr.a-Volume2-ShaykhAshrafAliThanvir.a_text.pdf'
+#output_path='/content/output'
+start_page=366
+stop_page=366
+# Convert PDF pages to images
+images = convert_from_path(pdf_path,first_page=start_page, last_page=stop_page)
+print('pages',len(images))
+for it,page in enumerate(images):
+    # Convert each page image to grayscale
+    page = page.convert('L')
+    #plt.imshow(page)
+    save_lines(np.array(page),start_page+it,output_path,name)
+
+def save_lines_test(img, page_num, out_path, name):
+    ret, thresh2 = cv2.threshold(img, 150, 255, cv2.THRESH_BINARY_INV)
+
+    # Step 1: Erode to separate closely packed lines
+    erosion_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (1, 3))
+    eroded_mask = cv2.morphologyEx(thresh2, cv2.MORPH_ERODE, erosion_kernel)
+
+    # Step 2: Dilate to merge individual characters into lines
+    dilation_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (50, 1))
+    mask = cv2.morphologyEx(eroded_mask, cv2.MORPH_DILATE, dilation_kernel)
+
+    # Find contours
+    contours = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    contours = contours[0] if len(contours) == 2 else contours[1]
+
+    bboxes = []
+    bboxes_img = img.copy()
+    for cntr in contours:
+        x, y, w, h = cv2.boundingRect(cntr)
+        cv2.rectangle(bboxes_img, (x, y), (x+w, y+h), (0, 0, 255), 1)
+        bboxes.append((x, y, w, h))
+
+    # Sort bounding boxes by y coordinate (top to bottom)
+    bboxes = sorted(bboxes, key=lambda box: box[1])
+    print('boxes',len(bboxes))
+
+    for i, (x, y, w, h) in enumerate(bboxes):
+        # Extract ROI from original image
+        roi = img[y:y+h, x:x+w]
+        # Save ROI as a separate image
+        print('line',i)
+        plt.imshow(roi)
+        cv2.imwrite(f'{out_path}/{name}_page_{page_num}_line_{i}.png', roi)
+
+    return
+
+import os
+for i in range(35):
+  try:
+    os.remove('/content/drive/MyDrive/Iqbal_ocr/ghazals_2_test_page_310_line_'+str(i)+'.png')
+    print('deleted')
+  except:
+    print('passing')
+
+import cv2
+import numpy as np
+
+pdf_path = '/content/drive/MyDrive/Iqbal_ocr/kuliyat iqbal.pdf'
+output_path='content/drive/MyDrive/Iqbal_ocr/' # 187
+name='ghazals_11'
+#pdf_path = '/content/Malfoozat-e-Hakeem-ul-Ummatr.a-Volume2-ShaykhAshrafAliThanvir.a_text.pdf'
+#output_path='/content/output'
+start_page=366
+stop_page=366
+# Convert PDF pages to images
+images = convert_from_path(pdf_path,first_page=start_page, last_page=stop_page)
+print('pages',len(images))
+for it,page in enumerate(images):
+    # Convert each page image to grayscale
+    image = np.array(page.convert('L'))
+
+
+#### image segmentation (to be cleaned)
+## neighborhood component
+
+#https://link.springer.com/chapter/10.1007/978-3-642-11164-8_60
+
+# Step 2: Thresholding (binarization)
+_, binary_image = cv2.threshold(image, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+
+# Step 3: Connected component analysis
+num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(binary_image, connectivity=8, ltype=cv2.CV_32S)
+
+# Step 4: Group components into lines based on vertical proximity and overlapping
+line_threshold = 10  # Adjust this threshold based on your image and font size
+lines = []
+current_line = []
+
+# Sort components by their y-coordinate (top-left corner)
+sorted_indices = np.argsort(stats[:, 1])
+
+for index in sorted_indices:
+    x, y, w, h, _ = stats[index]
+
+    # Check if there's an overlap or proximity with the current line
+    if len(current_line) > 0:
+        prev_x, prev_y, prev_w, prev_h = stats[current_line[-1], 0:4]
+        if y - prev_y < line_threshold:
+            current_line.append(index)
+        else:
+            # If there's a gap, finalize the current line
+            lines.append(current_line)
+            current_line = [index]
+    else:
+        current_line.append(index)
+
+# Add the last line
+if current_line:
+    lines.append(current_line)
+
+lines.sort(key=lambda line: stats[line[0], 1])
+
+# Step 5: Save each detected line as a separate image
+line_images = []
+
+for line_idx, line in enumerate(lines):
+    line_boxes = []
+    for idx in line:
+        x, y, w, h, _ = stats[idx]
+        line_boxes.append((x, y, w, h))
+
+    # Calculate the bounding box around the whole line
+    line_x = min([box[0] for box in line_boxes])
+    line_y = min([box[1] for box in line_boxes])
+    line_w = max([box[0] + box[2] for box in line_boxes]) - line_x
+    line_h = max([box[1] + box[3] for box in line_boxes]) - line_y
+
+    # Extract and save the line region from the original image
+    line_image = image[line_y:line_y + line_h, line_x:line_x + line_w]
+    line_images.append(line_image)
+    percent_blank=np.sum(line_image == 255) / (line_image.shape[0] * line_image.shape[1])
+    #print(percent_text)
+    #print(line_image.shape)
+    #if percent_blan<0.25:
+    if (line_image.shape[1]>500)and percent_blank <0.4 and (line_image.shape[0]>50):
+      print(line_idx,percent_blank)
+      plt.figure()
+      plt.imshow(line_image)
+      plt.title([percent_blank,line_image.shape[1],line_image.shape[0]])
+      #cv2.imwrite(f'line_{line_idx + 1}.png', line_image)
+
+'''
+# Display the result with bounding boxes
+result_image = cv2.cvtColor(binary_image, cv2.COLOR_GRAY2BGR)
+for line_idx, line in enumerate(lines):
+    for idx in line:
+        x, y, w, h, _ = stats[idx]
+        cv2.rectangle(result_image, (x, y), (x + w, y + h), (0, 255, 0), 2)
+    cv2.imwrite(f'line_{line_idx + 1}_bounding_boxes.png', result_image)
+
+# Display the result with bounding boxes
+plt.imshow(result_image)
+'''
+cv2.waitKey(0)
+cv2.destroyAllWindows()
+
+def seg_save_lines(image,out_path, name,page):
+ #https://link.springer.com/chapter/10.1007/978-3-642-11164-8_60
+ # Step 2: Thresholding (binarization)
+ _, binary_image = cv2.threshold(image, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+ # Step 3: Connected component analysis
+ num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(binary_image, connectivity=8, ltype=cv2.CV_32S)
+ # Step 4: Group components into lines based on vertical proximity and overlapping
+ line_threshold = 10  # Adjust this threshold based on your image and font size
+ lines = []
+ current_line = []
+ # Sort components by their y-coordinate (top-left corner)
+ sorted_indices = np.argsort(stats[:, 1])
+ for index in sorted_indices:
+    x, y, w, h, _ = stats[index]
+    # Check if there's an overlap or proximity with the current line
+    if len(current_line) > 0:
+        prev_x, prev_y, prev_w, prev_h = stats[current_line[-1], 0:4]
+        if y - prev_y < line_threshold:
+            current_line.append(index)
+        else:
+            # If there's a gap, finalize the current line
+            lines.append(current_line)
+            current_line = [index]
+    else:
+        current_line.append(index)
+ # Add the last line
+ if current_line:
+    lines.append(current_line)
+ lines.sort(key=lambda line: stats[line[0], 1])
+ # Step 5: Save each detected line as a separate image
+ line_images = []
+ for line_idx, line in enumerate(lines):
+    line_boxes = []
+    for idx in line:
+        x, y, w, h, _ = stats[idx]
+        line_boxes.append((x, y, w, h))
+
+    # Calculate the bounding box around the whole line
+    line_x = min([box[0] for box in line_boxes])
+    line_y = min([box[1] for box in line_boxes])
+    line_w = max([box[0] + box[2] for box in line_boxes]) - line_x
+    line_h = max([box[1] + box[3] for box in line_boxes]) - line_y
+
+    # Extract and save the line region from the original image
+    line_image = image[line_y:line_y + line_h, line_x:line_x + line_w]
+    line_images.append(line_image)
+    percent_blank=np.sum(line_image == 255) / (line_image.shape[0] * line_image.shape[1])
+    #print(percent_text)
+    #print(line_image.shape)
+    #if percent_blan<0.25:
+    if (line_image.shape[1]>500)and percent_blank <0.4 and (line_image.shape[0]>50):
+      cv2.imwrite(f'/content/drive/MyDrive/Iqbal_ocr/images/{name}_page_{page}_line_{line_idx + 1}.png', line_image)
+      #plt.figure()
+      #plt.imshow(line_image)
+      #print('saved',f'{out_path}/{name}_line_{line_idx + 1}.png')
+ cv2.waitKey(0)
+ cv2.destroyAllWindows()
+ return
+
+import cv2
+import numpy as np
+import csv
+
+pdf_path = '/content/drive/MyDrive/Iqbal_ocr/kuliyat iqbal.pdf'
+output_path='content/drive/MyDrive/Iqbal_ocr' # 187
+with open('/content/drive/MyDrive/Iqbal_ocr/list.csv', 'r', newline='', encoding='utf-8') as csvfile:
+  csv_reader = csv.reader(csvfile)
+  # Skip the header row if present
+  header = next(csv_reader)
+  # Iterate over each row in the CSV
+  for row in csv_reader:
+    # Extract the 3rd, 4th, and 5th columns
+    try:
+     #print(row[2])
+     start_page = int(row[2])
+     stop_page = int(row[3])
+     name = row[4]
+     # Convert PDF pages to images
+     images = convert_from_path(pdf_path,first_page=start_page, last_page=stop_page)
+     print('pages',len(images))
+     for it,page in enumerate(images):
+      # Convert each page image to grayscale
+      image = np.array(page.convert('L'))
+      seg_save_lines(image,output_path, name,str(start_page+it))
+    except Exception as e:
+      #pass
+      print(e)
+
+import cv2
+import numpy as np
+import csv
+
+pdf_path = '/content/drive/MyDrive/Iqbal_ocr/kuliyat iqbal.pdf'
+output_path='/content/drive/MyDrive/Iqbal_ocr' # 187
+with open('/content/drive/MyDrive/Iqbal_ocr/list.csv', 'r', newline='', encoding='utf-8') as csvfile:
+  csv_reader = csv.reader(csvfile)
+  # Skip the header row if present
+  header = next(csv_reader)
+  # Iterate over each row in the CSV
+  for row in csv_reader:
+    # Extract the 3rd, 4th, and 5th columns
+    try:
+     #print(row[2])
+     fname = row[0]
+     combined_lines = []
+     with open(output_path+'/transcripts/'+fname, 'r') as file:
+        lines = file.readlines()
+        for i in range(0, len(lines), 2):
+            line1 = lines[i].strip()
+            line2 = lines[i+1].strip() if (i+1) < len(lines) else ''
+            combined_line = f"{line1}    {line2}"  # Use four spaces for indentation
+            combined_lines.append([combined_line, fname.split('.')[0]+'_line_'+str(i)])
+     with open(output_path+'/labels.csv', 'a', newline='') as csvfile:
+        writer = csv.writer(csvfile)
+        writer.writerow(['Combined Lines', 'File Name'])  # Write header
+        writer.writerows(combined_lines)
+    except Exception as e:
+      #pass
+      print(e)
+
+### process text files (not finalized)
+
+# Function to process all text files in the directory
+def process_directory(directory_path, output_csv_path):
+    # Open the output CSV file
+    with open(output_csv_path, 'w', newline='', encoding='utf-8') as csvfile:
+        csv_writer = csv.writer(csvfile)
+        csv_writer.writerow(['File Name', 'First Line'])
+
+        # Iterate over all files in the directory
+        for filename in os.listdir(directory_path):
+            # Check if the file is a text file
+            if filename.endswith('.txt'):
+                file_path = os.path.join(directory_path, filename)
+                first_line = get_first_line(file_path)
+                csv_writer.writerow([filename, first_line])
+
+# Define the directory containing the text files and the output CSV file path
+directory_path = '/content/drive/MyDrive/Iqbal_ocr/transcripts'
+output_csv_path = '/content/drive/MyDrive/Iqbal_ocr/transcripts/list.csv'
+
+# Process the directory and write to the CSV
+process_directory(directory_path, output_csv_path)
+
+print(f"First lines have been written to {output_csv_path}")
+
+#### finding and aligning text labels
+
+
+! pip install Levenshtein
+
+import pandas as pd
+#import Levenshtein
+
+# Read the CSV files
+predictions_df = pd.read_csv('/content/drive/MyDrive/Iqbal_ocr/predictions.csv')
+labels_df = pd.read_csv('/content/drive/MyDrive/Iqbal_ocr/labels.csv')
+
+# Rename the columns
+predictions_df.columns = ['old file name', 'predicted text']
+labels_df.columns = ['original text','text file name']
+predictions_df.drop_duplicates(inplace=True)
+predictions_df['predicted text'] = predictions_df['predicted text'].astype(str)
+labels_df['original text'] = labels_df['original text'].astype(str)
+
+def levenshtein(a, b):
+    "Calculates the Levenshtein distance between a and b."
+    n, m = len(a), len(b)
+    if n > m:
+        a, b = b, a
+        n, m = m, n
+    current_row = list(range(n+1))
+    for i in range(1, m+1):
+        previous_row, current_row = current_row, [i] + [0] * n
+        for j in range(1, n+1):
+            add, delete, change = previous_row[j] + 1, current_row[j-1] + 1, previous_row[j-1]
+            if a[j-1] != b[i-1]:
+                change += 1
+            current_row[j] = min(add, delete, change)
+    return current_row[n]
+
+# Function to find the closest string and its Levenshtein distance
+def find_closest_string_and_distance(predicted_text, labels_df):
+    min_distance = float('inf')
+    closest_original_text = ""
+    closest_text_file_name = ""
+
+    for index, row in labels_df.iterrows():
+        original_text = row['original text']
+        text_file_name = row['text file name']
+        distance = levenshtein(original_text,predicted_text)/len(original_text)
+        if distance < min_distance:
+            min_distance = distance
+            closest_original_text = original_text
+            closest_text_file_name = text_file_name
+
+    return closest_original_text, closest_text_file_name, min_distance
+
+predictions_df
+destination_path ='/content/drive/MyDrive/Iqbal_ocr/predictions_with_closest_text.csv'
+results_df=pd.read_csv(destination_path)
+
+# Define the chunk size
+chunk_size = 30
+destination_path ='/content/drive/MyDrive/Iqbal_ocr/predictions_with_closest_text.csv'
+# Process the DataFrame in chunks
+for start in range(0, len(predictions_df), chunk_size):
+    end = start + chunk_size
+    chunk = predictions_df.iloc[start:end]
+
+    # Apply the function to each row in the chunk
+    results = chunk['predicted text'].apply(lambda x: find_closest_string_and_distance(x, labels_df))
+
+    # Extract the results into separate columns
+    chunk['closest original text'] = results.apply(lambda x: x[0])
+    chunk['text file name'] = results.apply(lambda x: x[1])
+    chunk['levenshtein distance'] = results.apply(lambda x: x[2])
+
+    # Append the chunk results to the destination CSV file
+    if start == 0:
+        chunk.to_csv(destination_path, index=False, encoding='utf-8', mode='w')
+    else:
+        chunk.to_csv(destination_path, index=False, encoding='utf-8', mode='a', header=False)
+    print('saved')
+# Print a confirmation message
+print(f"Processing completed. Results saved to {destination_path}")
+
+results_df['levenshtein distance'].sort_values().plot.bar()
+
+labels_df=results_df[(results_df['levenshtein distance']<0.63) ][['old file name','closest original text']]
+labels_df['old file name']=labels_df.apply(lambda x: x[0].split('/')[-1],axis=1)
+labels_df.rename(columns={"old file name": "file name", "closest original text": "text"},inplace=True)
