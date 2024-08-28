@@ -1,5 +1,7 @@
 # Required Installations
 ```
+pip install opencv-python
+pip install pillow
 pip install PyPDF2
 pip install pdf2image
 apt-get install poppler-utils
