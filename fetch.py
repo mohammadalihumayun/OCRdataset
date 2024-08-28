@@ -4,7 +4,7 @@ from image_segment import pdf_img_seg
 
 def main():
     # Set up the argument parser
-    parser = argparse.ArgumentParser(description="Process some functions based on user input.")
+    parser = argparse.ArgumentParser(description="Process the functions based on user input.")
 
     # Arguments for get_urls
     parser.add_argument('--base_url', type=str, help="The base URL to fetch poems from.")
@@ -20,7 +20,7 @@ def main():
 
     # Run get_urls if both required arguments are provided
     if args.base_url and args.out_file:
-        write_poems('args.base_url', 'out.txt')
+        write_poems(args.base_url, 'out.txt')
         print('poems writing complete')
     else:
       print('writing poems skipped: please pass base url and output text file')
