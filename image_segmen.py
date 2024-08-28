@@ -74,11 +74,9 @@ def seg_save_lines(image,out_path, name,page):
 
 
 
-def pdf_img_seg(pdf_path,output_path):
+def pdf_img_seg(pdf_path,output_path,start_page,stop_page):
     try:
-     start_page = 10
-     stop_page = 20
-     name = 'nazam_10'
+     name = 'nazam_'
      # Convert PDF pages to images
      images = convert_from_path(pdf_path,first_page=start_page, last_page=stop_page)
      print('pages',len(images))
