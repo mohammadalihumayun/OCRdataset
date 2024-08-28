@@ -2,7 +2,7 @@ import requests
 from bs4 import BeautifulSoup
 import html
 
-def write_poems(output_file_path):
+def write_poems(urls,output_file_path):
 
  # URL of the page containing the HTML text
  for iter, url in enumerate(urls):
