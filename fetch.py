@@ -30,7 +30,7 @@ def main():
         pdf_img_seg(args.pdf_path, args.output_path, args.start_page, args.stop_page)
         print('image segmentation complete')
     else:
-      print('pdf image segmentation skipped: please passpdf file, output images path and pdf start stop pages')
+      print('pdf image segmentation skipped: please pass pdf file, output images path and pdf start stop pages')
 
 if __name__ == "__main__":
     main()
