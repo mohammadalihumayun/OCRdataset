@@ -12,7 +12,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
-def get_poem_urls(url) # e.g. url = "https://www.rekhta.org/poets/allama-iqbal/ghazals?lang=ur"
+def get_poem_urls(url): # e.g. url = "https://www.rekhta.org/poets/allama-iqbal/ghazals?lang=ur"
 
  # setup chrome options
  chrome_options = webdriver.ChromeOptions()
