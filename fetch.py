@@ -20,7 +20,7 @@ def main():
 
     # Run get_urls if both required arguments are provided
     if args.base_url and args.out_file:
-        write_poems(args.base_url, 'out.txt')
+        write_poems(args.base_url, args.out_file)
         print('poems writing complete')
     else:
       print('writing poems skipped: please pass base url and output text file')
