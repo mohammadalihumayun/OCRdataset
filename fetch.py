@@ -26,7 +26,7 @@ def main():
       print('writing poems skipped: please pass base url and output text file')
 
     # Run pdf_img_seg if all required arguments are provided
-    if args.pdf_path and args.output_path and args.start_page is not None and args.stop_page is not None:
+    if args.pdf_path and args.output_path and args.start_page and args.stop_page:
         pdf_img_seg(args.pdf_path, args.output_path, args.start_page, args.stop_page)
         print('image segmentation complete')
     else:
