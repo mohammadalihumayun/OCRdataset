@@ -1,4 +1,4 @@
-# Required Instllations
+# Required Installations
 ```
 pip install PyPDF2
 pip install pdf2image
