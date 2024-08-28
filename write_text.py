@@ -30,5 +30,4 @@ def write_poems(urls,output_file_path):
   f.write(concatenated_text)
   f.close()
  print('writing complete')
-
-return
+ return
