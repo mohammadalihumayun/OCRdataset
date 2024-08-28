@@ -7,7 +7,7 @@ from PIL import Image
 from pdf2image import convert_from_path
 
 
-
+import os
 import cv2
 import numpy as np
 
@@ -75,6 +75,8 @@ def seg_save_lines(image,out_path, name,page):
 
 
 def pdf_img_seg(pdf_path,output_path,start_page,stop_page):
+    if not os.path.exists(output_path):
+      os.makedirs(output_path)
     try:
      name = 'nazam_'
      # Convert PDF pages to images
